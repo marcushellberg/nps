@@ -3,7 +3,11 @@ import {Button} from "@vaadin/react-components";
 import {useEffect, useState} from "react";
 import SurveyQuestionDTO from "Frontend/generated/app/vaadin/nps/service/SurveyQuestionDTO";
 import {ResponseService} from "Frontend/generated/endpoints";
+import {ViewConfig} from "@vaadin/hilla-file-router/types.js";
 
+export const config: ViewConfig = {
+  loginRequired: false
+}
 
 export default function SurveyAnswer() {
   const {token} = useParams();

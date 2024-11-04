@@ -21,11 +21,13 @@ import com.vaadin.flow.router.Menu;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 
 @Route("targets")
 @PageTitle("Targets")
 @PermitAll
 @Menu(title = "Targets", icon = "vaadin:users")
+@RegisterReflectionForBinding(TargetListFormDTO.class)
 public class TargetListsView extends HorizontalLayout implements HasGlobalAction {
 
     private final TargetListService service;

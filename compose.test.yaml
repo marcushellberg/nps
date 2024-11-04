@@ -1,0 +1,37 @@
+version: '3.8'
+services:
+  app:
+    image: nps-app:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/nps
+      - SPRING_DATASOURCE_USERNAME=nps
+      - SPRING_DATASOURCE_PASSWORD=nps123
+      - BASE_URL=http://localhost:8080
+      # Optional debug logging
+      - LOGGING_LEVEL_ORG_HIBERNATE=DEBUG
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK=INFO
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=nps
+      - POSTGRES_USER=nps
+      - POSTGRES_PASSWORD=nps123
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U nps" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_test_data:

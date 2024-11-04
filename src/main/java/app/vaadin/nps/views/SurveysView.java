@@ -19,11 +19,13 @@ import com.vaadin.flow.router.Menu;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 
 @Route("")
 @PermitAll
 @PageTitle("Surveys")
 @Menu(title = "Surveys", icon = "vaadin:dashboard")
+@RegisterReflectionForBinding(SurveyFormDTO.class)
 public class SurveysView extends HorizontalLayout implements HasGlobalAction {
 
     private final SurveyService surveyService;
