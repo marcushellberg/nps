@@ -1,0 +1,213 @@
+# File: nps.yaml
+# Purpose: Complete configuration for NPS application
+
+# 1. Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nps
+
+---
+# 2. ServiceAccount and RBAC
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nps-service-account
+  namespace: nps
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nps-k8s-role
+  namespace: nps
+rules:
+  - apiGroups: [ "" ]
+    resources: [ "configmaps", "secrets" ]
+    verbs: [ "get", "list", "watch" ]
+  - apiGroups: [ "" ]
+    resources: [ "pods" ]
+    verbs: [ "get", "list", "watch" ]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nps-k8s-role-binding
+  namespace: nps
+subjects:
+  - kind: ServiceAccount
+    name: nps-service-account
+    namespace: nps
+roleRef:
+  kind: Role
+  name: nps-k8s-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 3. ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nps
+  namespace: nps
+data:
+  application.properties: |
+    application.baseUrl=https://app.local
+    spring.datasource.url=jdbc:postgresql://postgres-service:5432/nps
+    vaadin.whitelisted-packages=com.example.nps
+
+---
+# 4. Secret for database credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nps-db-credentials
+  namespace: nps
+type: Opaque
+data:
+  POSTGRES_USER: bnBz
+  POSTGRES_PASSWORD: bnBzcGFzcw==
+  POSTGRES_DB: bnBz
+
+---
+# 5. PostgreSQL PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: nps
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# 6. PostgreSQL Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: nps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:13
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: nps-db-credentials
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+
+---
+# 7. PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: nps
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+
+---
+# 8. NPS Application Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nps
+  namespace: nps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nps
+  template:
+    metadata:
+      labels:
+        app: nps
+    spec:
+      serviceAccountName: nps-service-account
+      containers:
+        - name: nps
+          image: nps:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: nps-db-credentials
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: nps-db-credentials
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nps-db-credentials
+                  key: POSTGRES_PASSWORD
+
+---
+# 9. NPS Application Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nps-service
+  namespace: nps
+spec:
+  type: ClusterIP
+  selector:
+    app: nps
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+# 10. Ingress for NPS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nps-ingress
+  namespace: nps
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "ROUTEID"
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+spec:
+  rules:
+    - host: app.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nps-service
+                port:
+                  number: 80
