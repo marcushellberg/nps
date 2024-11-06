@@ -6,16 +6,20 @@ import {ResponseService} from "Frontend/generated/endpoints";
 import {ViewConfig} from "@vaadin/hilla-file-router/types.js";
 
 export const config: ViewConfig = {
-  loginRequired: false
+  loginRequired: false,
+  flowLayout: false
 }
 
 export default function SurveyAnswer() {
   const {token} = useParams();
   const [surveyQuestion, setSurveyQuestion] = useState<SurveyQuestionDTO>();
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     if (token) {
-      ResponseService.getSurveyQuestion(token).then(setSurveyQuestion);
+      ResponseService.getSurveyQuestion(token)
+        .then(setSurveyQuestion)
+        .catch(e => setErrorMessage(e.message));
     }
   }, [token]);
 
@@ -29,6 +33,8 @@ export default function SurveyAnswer() {
 
   return (
     <div className="p-m flex flex-col gap-s">
+
+      {errorMessage && <p className="text-l font-bold">{errorMessage}</p>}
 
       {surveyQuestion && surveyQuestion.alreadyAnswered && (
         <p>Thank you for your feedback!</p>
