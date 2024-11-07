@@ -1,64 +1,26 @@
-# File: nps.yaml
-# Purpose: Complete configuration for NPS application
+# base/resources.yaml
 
-# 1. Namespace
+# Namespace
 apiVersion: v1
 kind: Namespace
 metadata:
   name: nps
 
 ---
-# 2. ServiceAccount and RBAC
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: nps-service-account
-  namespace: nps
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: nps-k8s-role
-  namespace: nps
-rules:
-  - apiGroups: [ "" ]
-    resources: [ "configmaps", "secrets" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "" ]
-    resources: [ "pods" ]
-    verbs: [ "get", "list", "watch" ]
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: nps-k8s-role-binding
-  namespace: nps
-subjects:
-  - kind: ServiceAccount
-    name: nps-service-account
-    namespace: nps
-roleRef:
-  kind: Role
-  name: nps-k8s-role
-  apiGroup: rbac.authorization.k8s.io
-
----
-# 3. ConfigMap for application configuration
+# ConfigMap
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: nps
   namespace: nps
 data:
-  application.properties: |
-    application.baseUrl=https://app.local
-    spring.datasource.url=jdbc:postgresql://postgres-service:5432/nps
-    vaadin.whitelisted-packages=com.example.nps
+  DATA_SOURCE_URL: "jdbc:postgresql://postgres-service:5432/nps"
+  BASE_URL: "http://app.local"
+  SERVER_FORWARD_HEADERS_STRATEGY: "NATIVE"
+  SERVER_USE_FORWARD_HEADERS: "true"
 
 ---
-# 4. Secret for database credentials
+# Secret
 apiVersion: v1
 kind: Secret
 metadata:
@@ -71,7 +33,7 @@ data:
   POSTGRES_DB: bnBz
 
 ---
-# 5. PostgreSQL PVC
+# PostgreSQL PersistentVolume
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -85,7 +47,6 @@ spec:
       storage: 1Gi
 
 ---
-# 6. PostgreSQL Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -109,6 +70,9 @@ spec:
           envFrom:
             - secretRef:
                 name: nps-db-credentials
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
@@ -118,7 +82,7 @@ spec:
             claimName: postgres-pvc
 
 ---
-# 7. PostgreSQL Service
+# PostgreSQL Service
 apiVersion: v1
 kind: Service
 metadata:
@@ -132,7 +96,7 @@ spec:
       targetPort: 5432
 
 ---
-# 8. NPS Application Deployment
+# NPS Application Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -148,19 +112,35 @@ spec:
       labels:
         app: nps
     spec:
-      serviceAccountName: nps-service-account
       containers:
         - name: nps
-          image: nps:latest
+          image: nps:local
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
-          envFrom:
-            - secretRef:
-                name: nps-db-credentials
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: "prod"
+            - name: SERVER_FORWARD_HEADERS_STRATEGY
+              valueFrom:
+                configMapKeyRef:
+                  name: nps
+                  key: SERVER_FORWARD_HEADERS_STRATEGY
+            - name: SERVER_USE_FORWARD_HEADERS
+              valueFrom:
+                configMapKeyRef:
+                  name: nps
+                  key: SERVER_USE_FORWARD_HEADERS
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: nps
+                  key: DATA_SOURCE_URL
+            - name: BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: nps
+                  key: BASE_URL
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -171,9 +151,26 @@ spec:
                 secretKeyRef:
                   name: nps-db-credentials
                   key: POSTGRES_PASSWORD
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: credentials
+                  key: GOOGLE_CLIENT_ID
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: credentials
+                  key: GOOGLE_CLIENT_SECRET
+          volumeMounts:
+            - name: application-config
+              mountPath: /config
+      volumes:
+        - name: application-config
+          configMap:
+            name: nps
 
 ---
-# 9. NPS Application Service
+# NPS Application Service
 apiVersion: v1
 kind: Service
 metadata:
@@ -188,7 +185,7 @@ spec:
       targetPort: 8080
 
 ---
-# 10. Ingress for NPS
+# Ingress
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -196,12 +193,17 @@ metadata:
   namespace: nps
   annotations:
     nginx.ingress.kubernetes.io/affinity: "cookie"
-    nginx.ingress.kubernetes.io/session-cookie-name: "ROUTEID"
-    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
-    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-name: "JSESSIONID"
+    nginx.ingress.kubernetes.io/session-cookie-path: "/"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
+    nginx.ingress.kubernetes.io/proxy-cookie-path: "/ /"
+    nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
 spec:
+  ingressClassName: nginx
   rules:
-    - host: app.local
+    - host: nps.lvh.me
       http:
         paths:
           - path: /
