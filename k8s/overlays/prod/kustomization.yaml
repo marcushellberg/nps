@@ -56,4 +56,4 @@ patches:
         value: Always
       - op: replace
         path: /spec/template/spec/containers/0/image
-        value: marcushellberg/nps:5
+        value: marcushellberg/nps:6
