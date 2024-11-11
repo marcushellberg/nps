@@ -5,55 +5,9 @@ kind: Kustomization
 
 resources:
   - ../../base
-  - secrets.yaml
+  - secrets.yaml  # Production-specific secrets
 
-namespace: nps-prod
-
-commonLabels:
-  environment: production
-
-patches:
-  # Update the ingress for production with HTTPS
-  - target:
-      kind: Ingress
-      name: nps-ingress
-    patch: |-
-      - op: replace
-        path: /spec/rules/0/host
-        value: nps.perkele.app
-      - op: add
-        path: /metadata/annotations/cert-manager.io~1cluster-issuer
-        value: letsencrypt-prod
-      - op: add
-        path: /metadata/annotations/nginx.ingress.kubernetes.io~1ssl-redirect
-        value: "true"
-      - op: add
-        path: /spec/tls
-        value:
-          - hosts:
-              - nps.perkele.app
-            secretName: nps-tls-secret
-
-  # Update ConfigMap for production URL
-  - target:
-      kind: ConfigMap
-      name: nps
-    patch: |-
-      - op: replace
-        path: /data/BASE_URL
-        value: "https://nps.perkele.app"
-
-  # Update deployment for production
-  - target:
-      kind: Deployment
-      name: nps
-    patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 1
-      - op: replace
-        path: /spec/template/spec/containers/0/imagePullPolicy
-        value: Always
-      - op: replace
-        path: /spec/template/spec/containers/0/image
-        value: marcushellberg/nps:6
+patchesStrategicMerge:
+  - patches/configmap.yaml
+  - patches/deployment.yaml
+  - patches/ingress.yaml

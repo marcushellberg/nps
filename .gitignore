@@ -36,4 +36,5 @@ build/
 ### Vaadin ###
 src/main/frontend/generated
 
-k8s/overlays/*/secrets.yaml
+### k8s ###
+k8s/**/secrets.yaml
